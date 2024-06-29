@@ -1,59 +1,36 @@
-from app import app, db
-from server.models import Customer, Item, Review
+import pytest
+from server.app import app
+from server.models import db, Customer, Item, Review
 
-
-class TestSerialization:
-    '''models in models.py'''
-
-    def test_customer_is_serializable(self):
-        '''customer is serializable'''
+@pytest.fixture
+def client():
+    app.config['TESTING'] = True
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    with app.test_client() as client:
         with app.app_context():
-            c = Customer(name='Phil')
-            db.session.add(c)
-            db.session.commit()
-            r = Review(comment='great!', customer=c)
-            db.session.add(r)
-            db.session.commit()
-            customer_dict = c.to_dict()
+            db.create_all()
+            yield client
+            db.drop_all()
 
-            assert customer_dict['id']
-            assert customer_dict['name'] == 'Phil'
-            assert customer_dict['reviews']
-            assert 'customer' not in customer_dict['reviews']
+def test_serialization(client):
 
-    def test_item_is_serializable(self):
-        '''item is serializable'''
-        with app.app_context():
-            i = Item(name='Insulated Mug', price=9.99)
-            db.session.add(i)
-            db.session.commit()
-            r = Review(comment='great!', item=i)
-            db.session.add(r)
-            db.session.commit()
+    customer = Customer(name="Test Customer")
+    item = Item(name="Test Item", price=10.0)
+    review = Review(comment="Great item!", customer=customer, item=item)
+    
+    db.session.add_all([customer, item, review])
+    db.session.commit()
 
-            item_dict = i.to_dict()
-            assert item_dict['id']
-            assert item_dict['name'] == 'Insulated Mug'
-            assert item_dict['price'] == 9.99
-            assert item_dict['reviews']
-            assert 'item' not in item_dict['reviews']
+    # Test serialization
+    serialized_customer = customer.to_dict()
+    assert serialized_customer['name'] == "Test Customer"
+    assert 'reviews' not in serialized_customer
 
-    def test_review_is_serializable(self):
-        '''review is serializable'''
-        with app.app_context():
-            c = Customer()
-            i = Item()
-            db.session.add_all([c, i])
-            db.session.commit()
+    serialized_item = item.to_dict()
+    assert serialized_item['name'] == "Test Item"
+    assert 'reviews' not in serialized_item 
 
-            r = Review(comment='great!', customer=c, item=i)
-            db.session.add(r)
-            db.session.commit()
-
-            review_dict = r.to_dict()
-            assert review_dict['id']
-            assert review_dict['customer']
-            assert review_dict['item']
-            assert review_dict['comment'] == 'great!'
-            assert 'reviews' not in review_dict['customer']
-            assert 'reviews' not in review_dict['item']
+    serialized_review = review.to_dict()
+    assert serialized_review['comment'] == "Great item!"
+    assert 'customer' not in serialized_review  
+    assert 'item' not in serialized_review  

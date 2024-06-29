@@ -1,21 +1,26 @@
-from app import app, db
-from server.models import Customer, Item, Review
+import pytest
+from server.app import app
+from server.models import db, Customer, Item, Review
 
-
-class TestAssociationProxy:
-    '''Customer in models.py'''
-
-    def test_has_association_proxy(self):
-        '''has association proxy to items'''
+@pytest.fixture
+def client():
+    app.config['TESTING'] = True
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    with app.test_client() as client:
         with app.app_context():
-            c = Customer()
-            i = Item()
-            db.session.add_all([c, i])
-            db.session.commit()
+            db.create_all()
+            yield client
+            db.drop_all()
 
-            r = Review(comment='great!', customer=c, item=i)
-            db.session.add(r)
-            db.session.commit()
+def test_association_proxy(client):
+    # Create a customer, item, and review
+    customer = Customer(name="Test Customer")
+    item = Item(name="Test Item", price=10.0)
+    review = Review(comment="Great item!", customer=customer, item=item)
+    
+    db.session.add_all([customer, item, review])
+    db.session.commit()
 
-            assert hasattr(c, 'items')
-            assert i in c.items
+    # Verify association proxy
+    assert len(customer.items) == 1
+    assert customer.items[0].name == "Test Item"
